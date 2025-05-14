@@ -1,14 +1,160 @@
+use std::sync::Arc;
+
+use pollster::FutureExt;
+use wgpu::{Adapter, Device, Instance, Queue, Surface, SurfaceCapabilities, SurfaceConfiguration};
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalSize,
     event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::{self, Window, WindowAttributes},
 };
 
+struct State {
+    surface: wgpu::Surface<'static>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+
+    size: winit::dpi::PhysicalSize<u32>,
+    window: Arc<Window>,
+}
+
+impl State {
+    async fn new(window: Window) -> Self {
+        let window_arc = Arc::new(window);
+        let size = window_arc.inner_size();
+        let instance = Self::create_gpu_instance();
+        let surface = instance.create_surface(window_arc.clone()).unwrap();
+        let adapter = Self::create_adapter(instance, &surface).await;
+        let (device, queue) = Self::create_device(&adapter).await;
+        let surface_caps = surface.get_capabilities(&adapter);
+        let config = Self::create_surface_config(size, surface_caps);
+
+        Self {
+            surface,
+            device,
+            queue,
+            config,
+            size,
+            window: window_arc,
+        }
+    }
+
+    fn create_surface_config(
+        size: PhysicalSize<u32>,
+        capabilities: SurfaceCapabilities,
+    ) -> SurfaceConfiguration {
+        let surface_format = capabilities
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(capabilities.formats[0]);
+
+        SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: capabilities.present_modes[0],
+            desired_maximum_frame_latency: 2,
+            alpha_mode: capabilities.alpha_modes[0],
+            view_formats: vec![],
+        }
+    }
+
+    async fn create_device(adapter: &Adapter) -> (Device, Queue) {
+        adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+            })
+            .await
+            .unwrap()
+    }
+
+    async fn create_adapter(instance: Instance, surface: &Surface<'static>) -> Adapter {
+        instance
+            .request_adapter(&wgpu::RequestAdapterOptionsBase {
+                power_preference: wgpu::PowerPreference::default(),
+                force_fallback_adapter: false,
+                compatible_surface: Some(&surface),
+            })
+            .await
+            .unwrap()
+    }
+
+    fn create_gpu_instance() -> Instance {
+        Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            ..Default::default()
+        })
+    }
+
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        if new_size.width <= 0 || new_size.height <= 0 {
+            return;
+        }
+        self.size = new_size;
+        self.config.width = new_size.width;
+        self.config.height = new_size.height;
+        self.surface.configure(&self.device, &self.config);
+    }
+
+    fn input(&mut self, event: &WindowEvent) -> bool {
+        false
+    }
+
+    fn update(&mut self) {}
+
+    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        {
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        Ok(())
+    }
+}
+
 #[derive(Default)]
 struct App {
-    window: Option<Window>,
+    state: Option<State>,
 }
 
 impl ApplicationHandler for App {
@@ -16,7 +162,7 @@ impl ApplicationHandler for App {
         let window = event_loop
             .create_window(WindowAttributes::default())
             .unwrap();
-        self.window = Some(window);
+        self.state = Some(State::new(window).block_on())
     }
 
     fn window_event(
@@ -25,26 +171,44 @@ impl ApplicationHandler for App {
         window_id: window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        if let Some(window) = &self.window {
-            if window_id == window.id() {
-                match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => {
-                        event_loop.exit();
-                    }
-                    WindowEvent::RedrawRequested => {
-                        self.window.as_ref().unwrap().request_redraw();
-                    }
-                    _ => {}
+        let window = &self.state.as_ref().unwrap().window;
+        if window_id == window.id() && !self.state.as_mut().unwrap().input(&event) {
+            match event {
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            state: ElementState::Pressed,
+                            physical_key: PhysicalKey::Code(KeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => {
+                    event_loop.exit();
                 }
+                WindowEvent::Resized(physical_size) => {
+                    self.state.as_mut().unwrap().resize(physical_size);
+                }
+                WindowEvent::RedrawRequested => {
+                    self.state.as_ref().unwrap().window.request_redraw();
+
+                    self.state.as_mut().unwrap().update();
+                    match self.state.as_mut().unwrap().render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                            let new_size = self.state.as_ref().unwrap().size;
+                            self.state.as_mut().unwrap().resize(new_size);
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other) => {
+                            log::error!("OutOfMemory");
+                            event_loop.exit();
+                        }
+                        Err(wgpu::SurfaceError::Timeout) => {
+                            log::warn!("Surface timeout");
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
