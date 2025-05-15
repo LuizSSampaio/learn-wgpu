@@ -19,6 +19,8 @@ struct State {
 
     size: winit::dpi::PhysicalSize<u32>,
     window: Arc<Window>,
+
+    clear_color: [f64; 4]
 }
 
 impl State {
@@ -39,6 +41,7 @@ impl State {
             config,
             size,
             window: window_arc,
+            clear_color: [0.1, 0.2, 0.3, 1.0]
         }
     }
 
@@ -107,7 +110,16 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::CursorMoved {position, .. } => {
+                self.clear_color[0] = position.x / self.size.width as f64;
+                self.clear_color[1] = position.y / self.size.height as f64;
+                self.clear_color[2] = (self.clear_color[0] + self.clear_color[1]) / 2.0;
+           }
+            _ => return false
+        }
+
+        true
     }
 
     fn update(&mut self) {}
@@ -131,10 +143,10 @@ impl State {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
+                            r: self.clear_color[0],
+                            g: self.clear_color[1],
+                            b: self.clear_color[2],
+                            a: self.clear_color[3],
                         }),
                         store: wgpu::StoreOp::Store,
                     },
