@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use pollster::FutureExt;
-use wgpu::{Adapter, Device, Instance, Queue, Surface, SurfaceCapabilities, SurfaceConfiguration};
+use wgpu::{
+    Adapter, Device, Instance, PipelineLayout, Queue, RenderPipeline, ShaderModule, Surface,
+    SurfaceCapabilities, SurfaceConfiguration, include_wgsl,
+};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -20,7 +23,8 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     window: Arc<Window>,
 
-    clear_color: [f64; 4]
+    clear_color: [f64; 4],
+    render_pipeline: wgpu::RenderPipeline,
 }
 
 impl State {
@@ -33,6 +37,10 @@ impl State {
         let (device, queue) = Self::create_device(&adapter).await;
         let surface_caps = surface.get_capabilities(&adapter);
         let config = Self::create_surface_config(size, surface_caps);
+        let shader = Self::create_shader(&device);
+        let pipeline_layout = Self::create_pipeline_layout(&device);
+        let render_pipeline =
+            Self::create_render_pipeline(&device, pipeline_layout, shader, &config);
 
         Self {
             surface,
@@ -41,8 +49,66 @@ impl State {
             config,
             size,
             window: window_arc,
-            clear_color: [0.1, 0.2, 0.3, 1.0]
+            clear_color: [0.1, 0.2, 0.3, 1.0],
+            render_pipeline,
         }
+    }
+
+    fn create_render_pipeline(
+        device: &Device,
+        pipeline_layout: PipelineLayout,
+        shader_module: ShaderModule,
+        config: &SurfaceConfiguration,
+    ) -> RenderPipeline {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some("vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
+
+    fn create_pipeline_layout(device: &Device) -> PipelineLayout {
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        })
+    }
+
+    fn create_shader(device: &Device) -> ShaderModule {
+        device.create_shader_module(include_wgsl!("shader.wgsl"))
     }
 
     fn create_surface_config(
@@ -111,12 +177,12 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved {position, .. } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 self.clear_color[0] = position.x / self.size.width as f64;
                 self.clear_color[1] = position.y / self.size.height as f64;
                 self.clear_color[2] = (self.clear_color[0] + self.clear_color[1]) / 2.0;
-           }
-            _ => return false
+            }
+            _ => return false,
         }
 
         true
@@ -136,7 +202,7 @@ impl State {
             });
 
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -155,6 +221,9 @@ impl State {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw(0..3, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
