@@ -1,0 +1,103 @@
+use wgpu::{include_wgsl, Adapter, Device, Instance, Queue, RenderPipeline, Surface, SurfaceCapabilities, SurfaceConfiguration};
+use winit::dpi::PhysicalSize;
+
+pub fn create_render_pipeline(device: &Device, config: &SurfaceConfiguration) -> RenderPipeline {
+    let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Render Pipeline Layout"),
+        bind_group_layouts: &[],
+        push_constant_ranges: &[],
+    });
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Render Pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader_module,
+            entry_point: Some("vs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader_module,
+            entry_point: Some("fs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: config.format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+        multiview: None,
+        cache: None,
+    })
+}
+
+pub fn create_surface_config(
+    size: PhysicalSize<u32>,
+    capabilities: SurfaceCapabilities,
+) -> SurfaceConfiguration {
+    let surface_format = capabilities
+        .formats
+        .iter()
+        .find(|f| f.is_srgb())
+        .copied()
+        .unwrap_or(capabilities.formats[0]);
+
+    SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: surface_format,
+        width: size.width,
+        height: size.height,
+        present_mode: capabilities.present_modes[0],
+        desired_maximum_frame_latency: 2,
+        alpha_mode: capabilities.alpha_modes[0],
+        view_formats: vec![],
+    }
+}
+
+pub async fn create_device(adapter: &Adapter) -> (Device, Queue) {
+    adapter
+        .request_device(&wgpu::wgt::DeviceDescriptor {
+            label: None,
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            memory_hints: Default::default(),
+            trace: wgpu::Trace::Off,
+        })
+        .await
+        .unwrap()
+}
+
+pub async fn create_adapter(instance: Instance, surface: &Surface<'static>) -> Adapter {
+    instance
+        .request_adapter(&wgpu::RequestAdapterOptionsBase {
+            power_preference: wgpu::PowerPreference::default(),
+            force_fallback_adapter: false,
+            compatible_surface: Some(&surface),
+        })
+        .await
+        .unwrap()
+}
+
+pub fn create_gpu_instance() -> Instance {
+    Instance::new(&wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        ..Default::default()
+    })
+}
