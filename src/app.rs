@@ -1,6 +1,11 @@
-use std::sync::Arc;
 use pollster::FutureExt;
-use winit::{application::ApplicationHandler, event::{ElementState, KeyEvent, WindowEvent}, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowAttributes}};
+use std::sync::Arc;
+use winit::{
+    application::ApplicationHandler,
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
+    window::{Window, WindowAttributes},
+};
 
 use crate::renderer::RendererState;
 
@@ -12,8 +17,12 @@ pub struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        self.window = Some(Arc::new(event_loop.create_window(WindowAttributes::default()).unwrap()));
-        self.renderer_state = Some(RendererState::new(&self.window.as_ref().unwrap()).block_on()); 
+        self.window = Some(Arc::new(
+            event_loop
+                .create_window(WindowAttributes::default())
+                .unwrap(),
+        ));
+        self.renderer_state = Some(RendererState::new(self.window.as_ref().unwrap()).block_on());
     }
 
     fn window_event(
@@ -66,3 +75,4 @@ impl ApplicationHandler for App {
         }
     }
 }
+

@@ -1,8 +1,14 @@
-use wgpu::{include_wgsl, Adapter, Device, Instance, Queue, RenderPipeline, Surface, SurfaceCapabilities, SurfaceConfiguration};
+use wgpu::{
+    Adapter, Device, Instance, Queue, RenderPipeline, ShaderModule, Surface, SurfaceCapabilities,
+    SurfaceConfiguration,
+};
 use winit::dpi::PhysicalSize;
 
-pub fn create_render_pipeline(device: &Device, config: &SurfaceConfiguration) -> RenderPipeline {
-    let shader_module = device.create_shader_module(include_wgsl!("shader.wgsl"));
+pub fn create_render_pipeline(
+    device: &Device,
+    config: &SurfaceConfiguration,
+    shader_module: ShaderModule,
+) -> RenderPipeline {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
         bind_group_layouts: &[],
@@ -89,7 +95,7 @@ pub async fn create_adapter(instance: Instance, surface: &Surface<'static>) -> A
         .request_adapter(&wgpu::RequestAdapterOptionsBase {
             power_preference: wgpu::PowerPreference::default(),
             force_fallback_adapter: false,
-            compatible_surface: Some(&surface),
+            compatible_surface: Some(surface),
         })
         .await
         .unwrap()

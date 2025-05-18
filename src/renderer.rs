@@ -1,5 +1,10 @@
 use std::sync::Arc;
-use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
+use winit::{
+    dpi::PhysicalSize,
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
+};
 
 use crate::wgpu_utils;
 
@@ -10,6 +15,7 @@ pub struct RendererState {
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
+    alt_render_pipeline: wgpu::RenderPipeline,
 }
 
 impl RendererState {
@@ -21,7 +27,10 @@ impl RendererState {
         let (device, queue) = wgpu_utils::create_device(&adapter).await;
         let surface_caps = surface.get_capabilities(&adapter);
         let config = wgpu_utils::create_surface_config(size, surface_caps);
-        let render_pipeline = wgpu_utils::create_render_pipeline(&device, &config);
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+        let render_pipeline = wgpu_utils::create_render_pipeline(&device, &config, shader);
+        let alt_shader = device.create_shader_module(wgpu::include_wgsl!("second.wgsl"));
+        let alt_render_pipeline = wgpu_utils::create_render_pipeline(&device, &config, alt_shader);
 
         Self {
             surface,
@@ -30,11 +39,12 @@ impl RendererState {
             config,
             size,
             render_pipeline,
+            alt_render_pipeline,
         }
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        if new_size.width <= 0 || new_size.height <= 0 {
+        if new_size.width == 0 || new_size.height == 0 {
             return;
         }
 
@@ -45,7 +55,24 @@ impl RendererState {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Space),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                let temp = self.render_pipeline.clone();
+                self.render_pipeline = self.alt_render_pipeline.clone();
+                self.alt_render_pipeline = temp;
+            }
+            _ => return false,
+        }
+
+        true
     }
 
     pub fn update(&mut self) {}
