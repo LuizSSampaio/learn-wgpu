@@ -32,6 +32,14 @@ pub fn create_vertex_buffer(device: &Device, vertices: &[Vertex]) -> Buffer {
     })
 }
 
+pub fn create_index_buffer(device: &Device, indices: &[u16]) -> Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(indices),
+        usage: wgpu::BufferUsages::INDEX,
+    })
+}
+
 pub fn create_render_pipeline(
     device: &Device,
     config: &SurfaceConfiguration,
