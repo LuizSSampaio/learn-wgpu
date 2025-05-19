@@ -1,5 +1,10 @@
 use std::sync::Arc;
-use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
+use winit::{
+    dpi::PhysicalSize,
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
+};
 
 use crate::wgpu_utils::{self, Vertex};
 
@@ -28,6 +33,30 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
+const ALT_VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+        color: [1.0, 0.0, 0.0],
+    }, // bottom-left
+    Vertex {
+        position: [0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
+    }, // bottom-right
+    Vertex {
+        position: [0.5, 0.5, 0.0],
+        color: [0.0, 0.0, 1.0],
+    }, // top-right
+    Vertex {
+        position: [-0.5, 0.5, 0.0],
+        color: [1.0, 1.0, 0.0],
+    }, // top-left
+];
+
+const ALT_INDICES: &[u16] = &[
+    0, 1, 2, // first triangle
+    0, 2, 3, // second triangle
+];
+
 pub struct RendererState {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -37,8 +66,11 @@ pub struct RendererState {
     render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
+    alt_vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    alt_index_buffer: wgpu::Buffer,
     num_indices: u32,
+    alt_num_indices: u32,
 }
 
 impl RendererState {
@@ -53,8 +85,11 @@ impl RendererState {
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let render_pipeline = wgpu_utils::create_render_pipeline(&device, &config, shader);
         let vertex_buffer = wgpu_utils::create_vertex_buffer(&device, VERTICES);
+        let alt_vertex_buffer = wgpu_utils::create_vertex_buffer(&device, ALT_VERTICES);
         let index_buffer = wgpu_utils::create_index_buffer(&device, INDICES);
+        let alt_index_buffer = wgpu_utils::create_index_buffer(&device, ALT_INDICES);
         let num_indices = INDICES.len() as u32;
+        let alt_num_indices = ALT_INDICES.len() as u32;
 
         Self {
             surface,
@@ -64,8 +99,11 @@ impl RendererState {
             size,
             render_pipeline,
             vertex_buffer,
+            alt_vertex_buffer,
             index_buffer,
+            alt_index_buffer,
             num_indices,
+            alt_num_indices,
         }
     }
 
@@ -81,7 +119,30 @@ impl RendererState {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state: ElementState::Pressed,
+                        physical_key: PhysicalKey::Code(KeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                let temp_vert = self.vertex_buffer.clone();
+                self.vertex_buffer = self.alt_vertex_buffer.clone();
+                self.alt_vertex_buffer = temp_vert;
+
+                let temp_ind = self.index_buffer.clone();
+                self.index_buffer = self.alt_index_buffer.clone();
+                self.alt_index_buffer = temp_ind;
+
+                std::mem::swap(&mut self.num_indices, &mut self.alt_num_indices);
+            }
+            _ => return false,
+        }
+
+        true
     }
 
     pub fn update(&mut self) {}
