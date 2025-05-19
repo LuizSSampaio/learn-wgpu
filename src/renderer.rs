@@ -1,12 +1,22 @@
 use std::sync::Arc;
-use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, KeyEvent, WindowEvent},
-    keyboard::{KeyCode, PhysicalKey},
-    window::Window,
-};
+use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
-use crate::wgpu_utils;
+use crate::wgpu_utils::{self, Vertex};
+
+const VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [0.0, 0.5, 0.0],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.0],
+        color: [0.0, 0.0, 1.0],
+    },
+];
 
 pub struct RendererState {
     surface: wgpu::Surface<'static>,
@@ -15,7 +25,9 @@ pub struct RendererState {
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    alt_render_pipeline: wgpu::RenderPipeline,
+
+    vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
 }
 
 impl RendererState {
@@ -29,8 +41,8 @@ impl RendererState {
         let config = wgpu_utils::create_surface_config(size, surface_caps);
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let render_pipeline = wgpu_utils::create_render_pipeline(&device, &config, shader);
-        let alt_shader = device.create_shader_module(wgpu::include_wgsl!("second.wgsl"));
-        let alt_render_pipeline = wgpu_utils::create_render_pipeline(&device, &config, alt_shader);
+        let vertex_buffer = wgpu_utils::create_vertex_buffer(&device, VERTICES);
+        let num_vertices = VERTICES.len() as u32;
 
         Self {
             surface,
@@ -39,7 +51,8 @@ impl RendererState {
             config,
             size,
             render_pipeline,
-            alt_render_pipeline,
+            vertex_buffer,
+            num_vertices,
         }
     }
 
@@ -55,24 +68,7 @@ impl RendererState {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(KeyCode::Space),
-                        state: ElementState::Pressed,
-                        ..
-                    },
-                ..
-            } => {
-                let temp = self.render_pipeline.clone();
-                self.render_pipeline = self.alt_render_pipeline.clone();
-                self.alt_render_pipeline = temp;
-            }
-            _ => return false,
-        }
-
-        true
+        false
     }
 
     pub fn update(&mut self) {}
@@ -110,7 +106,8 @@ impl RendererState {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..self.num_vertices, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

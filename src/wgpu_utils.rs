@@ -1,8 +1,36 @@
 use wgpu::{
-    Adapter, Device, Instance, Queue, RenderPipeline, ShaderModule, Surface, SurfaceCapabilities,
-    SurfaceConfiguration,
+    Adapter, Buffer, Device, Instance, Queue, RenderPipeline, ShaderModule, Surface,
+    SurfaceCapabilities, SurfaceConfiguration, VertexBufferLayout, util::DeviceExt,
 };
 use winit::dpi::PhysicalSize;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pub position: [f32; 3],
+    pub color: [f32; 3],
+}
+
+impl Vertex {
+    const ATTRIBS: [wgpu::VertexAttribute; 2] =
+        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+
+    pub fn desc() -> VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &Self::ATTRIBS,
+        }
+    }
+}
+
+pub fn create_vertex_buffer(device: &Device, vertices: &[Vertex]) -> Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    })
+}
 
 pub fn create_render_pipeline(
     device: &Device,
@@ -22,7 +50,7 @@ pub fn create_render_pipeline(
             module: &shader_module,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[],
+            buffers: &[Vertex::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
