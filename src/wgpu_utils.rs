@@ -5,7 +5,7 @@ use wgpu::{
 };
 use winit::dpi::PhysicalSize;
 
-use crate::texture;
+use crate::{camera::CameraUniform, texture};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -25,6 +25,45 @@ impl Vertex {
             attributes: &Self::ATTRIBS,
         }
     }
+}
+
+pub fn create_camera_bind_buffer(
+    device: &Device,
+    camera_buffer: &Buffer,
+    camera_bind_group_layout: &BindGroupLayout,
+) -> BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Camera Bind Group"),
+        layout: camera_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: camera_buffer.as_entire_binding(),
+        }],
+    })
+}
+
+pub fn create_camera_bind_group_layout(device: &Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Camera Bind Group Layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    })
+}
+
+pub fn create_camera_buffer(device: &Device, camera_uniform: &CameraUniform) -> Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Buffer"),
+        contents: bytemuck::cast_slice(&[camera_uniform.to_owned()]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    })
 }
 
 pub fn create_diffuse_bind_group(
@@ -91,12 +130,13 @@ pub fn create_index_buffer(device: &Device, indices: &[u16]) -> Buffer {
 pub fn create_render_pipeline(
     device: &Device,
     config: &SurfaceConfiguration,
-    binding_group_layout: &BindGroupLayout,
+    texture_bind_group_layout: &BindGroupLayout,
+    camera_bind_group_layout: &BindGroupLayout,
     shader_module: ShaderModule,
 ) -> RenderPipeline {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Render Pipeline Layout"),
-        bind_group_layouts: &[binding_group_layout],
+        bind_group_layouts: &[texture_bind_group_layout, camera_bind_group_layout],
         push_constant_ranges: &[],
     });
 

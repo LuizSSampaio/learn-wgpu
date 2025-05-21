@@ -2,6 +2,7 @@ use std::sync::Arc;
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::{
+    camera::{Camera, CameraUniform},
     texture,
     wgpu_utils::{self, Vertex},
 };
@@ -45,6 +46,11 @@ pub struct RendererState {
 
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
+
+    camera: Camera,
+    camera_uniform: CameraUniform,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
 }
 
 impl RendererState {
@@ -58,10 +64,12 @@ impl RendererState {
         let config = wgpu_utils::create_surface_config(size, surface_caps);
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let diffuse_bind_group_layout = wgpu_utils::create_diffuse_bind_group_layout(&device);
+        let camera_bind_group_layout = wgpu_utils::create_camera_bind_group_layout(&device);
         let render_pipeline = wgpu_utils::create_render_pipeline(
             &device,
             &config,
             &diffuse_bind_group_layout,
+            &camera_bind_group_layout,
             shader,
         );
 
@@ -78,6 +86,24 @@ impl RendererState {
             &diffuse_texture,
         );
 
+        let camera = Camera {
+            eye: (0.0, 1.0, 2.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: cgmath::Vector3::unit_y(),
+            aspect: config.width as f32 / config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+        let camera_buffer = wgpu_utils::create_camera_buffer(&device, &camera_uniform);
+        let camera_bind_group = wgpu_utils::create_camera_bind_buffer(
+            &device,
+            &camera_buffer,
+            &camera_bind_group_layout,
+        );
+
         Self {
             surface,
             device,
@@ -90,6 +116,10 @@ impl RendererState {
             num_indices,
             diffuse_bind_group,
             diffuse_texture,
+            camera,
+            camera_uniform,
+            camera_buffer,
+            camera_bind_group,
         }
     }
 
@@ -144,6 +174,7 @@ impl RendererState {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
