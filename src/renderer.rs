@@ -2,7 +2,7 @@ use std::sync::Arc;
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::{
-    camera::{Camera, CameraUniform},
+    camera::{Camera, CameraController, CameraUniform},
     texture,
     wgpu_utils::{self, Vertex},
 };
@@ -51,6 +51,7 @@ pub struct RendererState {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    camera_controller: CameraController,
 }
 
 impl RendererState {
@@ -103,6 +104,7 @@ impl RendererState {
             &camera_buffer,
             &camera_bind_group_layout,
         );
+        let camera_controller = CameraController::new(0.02);
 
         Self {
             surface,
@@ -120,6 +122,7 @@ impl RendererState {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
+            camera_controller,
         }
     }
 
@@ -135,10 +138,18 @@ impl RendererState {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        self.camera_controller.process_events(event)
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
+        self.camera_uniform.update_view_proj(&self.camera);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
