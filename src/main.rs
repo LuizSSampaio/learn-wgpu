@@ -2,6 +2,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 mod app;
 mod camera;
+mod instance;
 mod renderer;
 mod texture;
 mod wgpu_utils;

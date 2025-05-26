@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, SquareMatrix, Zero};
+use cgmath::{InnerSpace, SquareMatrix};
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},

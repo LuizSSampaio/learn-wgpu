@@ -5,7 +5,11 @@ use wgpu::{
 };
 use winit::dpi::PhysicalSize;
 
-use crate::{camera::CameraUniform, texture};
+use crate::{
+    camera::CameraUniform,
+    instance::{self, InstanceRaw},
+    texture,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -25,6 +29,19 @@ impl Vertex {
             attributes: &Self::ATTRIBS,
         }
     }
+}
+
+pub fn create_instance_buffer(device: &Device, instances: &[instance::Instance]) -> Buffer {
+    let instance_data = instances
+        .iter()
+        .map(instance::Instance::to_raw)
+        .collect::<Vec<_>>();
+
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Instance Buffer"),
+        contents: bytemuck::cast_slice(&instance_data),
+        usage: wgpu::BufferUsages::VERTEX,
+    })
 }
 
 pub fn create_camera_bind_buffer(
@@ -147,7 +164,7 @@ pub fn create_render_pipeline(
             module: &shader_module,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[Vertex::desc()],
+            buffers: &[Vertex::desc(), InstanceRaw::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
