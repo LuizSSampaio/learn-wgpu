@@ -57,6 +57,7 @@ pub struct RendererState {
 
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
+    deth_texture: texture::Texture,
 
     camera: Camera,
     camera_uniform: CameraUniform,
@@ -97,6 +98,7 @@ impl RendererState {
             &diffuse_bind_group_layout,
             &diffuse_texture,
         );
+        let deth_texture = texture::Texture::create_deth_texture(&device, &config, "Deth Texture");
 
         let camera = Camera {
             eye: (0.0, 1.0, 2.0).into(),
@@ -153,6 +155,7 @@ impl RendererState {
             num_indices,
             diffuse_bind_group,
             diffuse_texture,
+            deth_texture,
             camera,
             camera_uniform,
             camera_buffer,
@@ -172,6 +175,8 @@ impl RendererState {
         self.config.width = new_size.width;
         self.config.height = new_size.height;
         self.surface.configure(&self.device, &self.config);
+        self.deth_texture =
+            texture::Texture::create_deth_texture(&self.device, &self.config, "Deth Texture");
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
@@ -215,7 +220,14 @@ impl RendererState {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.deth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
