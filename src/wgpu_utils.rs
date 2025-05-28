@@ -1,35 +1,15 @@
 use wgpu::{
     Adapter, BindGroup, BindGroupLayout, Buffer, Device, Instance, Queue, RenderPipeline,
-    ShaderModule, Surface, SurfaceCapabilities, SurfaceConfiguration, VertexBufferLayout,
-    util::DeviceExt,
+    ShaderModule, Surface, SurfaceCapabilities, SurfaceConfiguration, util::DeviceExt,
 };
 use winit::dpi::PhysicalSize;
 
 use crate::{
     camera::CameraUniform,
     instance::{self, InstanceRaw},
+    model::{ModelVertex, Vertex},
     texture,
 };
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    const ATTRIBS: [wgpu::VertexAttribute; 2] =
-        wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2];
-
-    pub fn desc() -> VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &Self::ATTRIBS,
-        }
-    }
-}
 
 pub fn create_instance_buffer(device: &Device, instances: &[instance::Instance]) -> Buffer {
     let instance_data = instances
@@ -128,22 +108,6 @@ pub fn create_diffuse_bind_group_layout(device: &Device) -> BindGroupLayout {
     })
 }
 
-pub fn create_vertex_buffer(device: &Device, vertices: &[Vertex]) -> Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    })
-}
-
-pub fn create_index_buffer(device: &Device, indices: &[u16]) -> Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(indices),
-        usage: wgpu::BufferUsages::INDEX,
-    })
-}
-
 pub fn create_render_pipeline(
     device: &Device,
     config: &SurfaceConfiguration,
@@ -164,7 +128,7 @@ pub fn create_render_pipeline(
             module: &shader_module,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[Vertex::desc(), InstanceRaw::desc()],
+            buffers: &[ModelVertex::desc(), InstanceRaw::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
