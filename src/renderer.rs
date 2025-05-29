@@ -5,7 +5,8 @@ use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 use crate::{
     camera::{Camera, CameraController, CameraUniform},
     instance::Instance,
-    model, resources, texture, wgpu_utils,
+    model::{self, DrawModel},
+    resources, texture, wgpu_utils,
 };
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -21,8 +22,6 @@ pub struct RendererState {
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
-    diffuse_bind_group: wgpu::BindGroup,
-    diffuse_texture: texture::Texture,
     deth_texture: texture::Texture,
 
     camera: Camera,
@@ -54,14 +53,6 @@ impl RendererState {
             shader,
         );
 
-        let diffuse_bytes = include_bytes!("happy-tree.png");
-        let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
-        let diffuse_bind_group = wgpu_utils::create_diffuse_bind_group(
-            &device,
-            &diffuse_bind_group_layout,
-            &diffuse_texture,
-        );
         let deth_texture = texture::Texture::create_deth_texture(&device, &config, "Deth Texture");
 
         let camera = Camera {
@@ -119,8 +110,6 @@ impl RendererState {
             config,
             size,
             render_pipeline,
-            diffuse_bind_group,
-            diffuse_texture,
             deth_texture,
             camera,
             camera_uniform,
@@ -201,12 +190,12 @@ impl RendererState {
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
-            use crate::model::DrawModel;
-            render_pass
-                .draw_mesh_instanced(&self.obj_model.meshes[0], 0..self.instances.len() as u32);
+            render_pass.draw_model_instanced(
+                &self.obj_model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+            );
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

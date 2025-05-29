@@ -63,27 +63,6 @@ pub fn create_camera_buffer(device: &Device, camera_uniform: &CameraUniform) -> 
     })
 }
 
-pub fn create_diffuse_bind_group(
-    device: &Device,
-    binding_group_layout: &BindGroupLayout,
-    texture: &texture::Texture,
-) -> BindGroup {
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Diffuse Binding Group"),
-        layout: binding_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&texture.sampler),
-            },
-        ],
-    })
-}
-
 pub fn create_diffuse_bind_group_layout(device: &Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Texture Bind Group Layout"),
